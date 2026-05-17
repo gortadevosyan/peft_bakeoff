@@ -1,4 +1,5 @@
 import os
+import torch
 os.environ["WANDB_PROJECT"] = "peft-bakeoff"
 
 import argparse
@@ -8,6 +9,8 @@ import eval
 import utils
 from transformers import DataCollatorForSeq2Seq
 from transformers import Trainer, TrainingArguments
+from transformers import BitsAndBytesConfig
+from lora import apply_lora, freeze_model
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--method", default="full_ft",
@@ -31,7 +34,6 @@ model = AutoModelForCausalLM.from_pretrained(
 
 # ── PEFT surgery (before moving to GPU, so new params are on same device) ──
 if METHOD == "lora":
-    from lora import apply_lora, freeze_model
     freeze_model(model)
     model = apply_lora(model, rank=args_cli.lora_rank, alpha=args_cli.lora_alpha)
 elif METHOD == "ia3":
@@ -42,7 +44,21 @@ elif METHOD == "ia3":
 elif METHOD == "prefix":
     raise NotImplementedError("prefix")
 elif METHOD == "qlora":
-    raise NotImplementedError("qlora")
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",                    # NormalFloat-4, the QLoRA paper's default
+        bnb_4bit_compute_dtype=torch.bfloat16,        # matmuls run in bf16, weights stored 4-bit
+        bnb_4bit_use_double_quant=True,               # quantize the quant constants too; ~0.4 bit/param savings
+    )
+    # Re-load the model in 4-bit (this REPLACES the load above)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        quantization_config=bnb_config,
+        torch_dtype=torch.bfloat16,
+    )
+    freeze_model(model)
+    model = apply_lora(model, rank=args_cli.lora_rank, alpha=args_cli.lora_alpha)
+
 
 model = model.to('cuda')
 
