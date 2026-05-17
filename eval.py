@@ -91,10 +91,12 @@ def evaluate_and_dump(model, tokenizer, test_data, output_path, max_new_tokens=2
             correct += 1
         total += 1
 
+    acc = correct / total
+    results.insert(0, {"accuracy":acc})
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w") as f:
         for r in results:
             f.write(json.dumps(r) + "\n")
 
     model.train()
-    return correct / total
+    return acc
