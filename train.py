@@ -17,19 +17,24 @@ parser.add_argument("--method", default="full_ft",
                     choices=["full_ft", "lora", "ia3", "prefix", "qlora"])
 parser.add_argument("--lora_rank", type=int, default=16)
 parser.add_argument("--lora_alpha", type=int, default=16)
+parser.add_argument("--prefix_tokens", type=int, default=16)
+parser.add_argument("--flash_attn", action="store_true")
 parser.add_argument("--lr", type=float, default=None)
+parser.add_argument("--run_name", type=str, default=None)
 args_cli = parser.parse_args()
 
 METHOD = args_cli.method
-RUN_DIR = f"runs/{METHOD}"
-RUN_NAME = f"{METHOD}_v1"
+RUN_NAME = args_cli.run_name or f"{METHOD}_v1"
+RUN_DIR = f"runs/{RUN_NAME}"
 LR = args_cli.lr or utils.LR[METHOD]
 
 model_name = 'Qwen/Qwen2.5-1.5B'
+attn_impl = "flash_attention_2" if args_cli.flash_attn else None
 
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     torch_dtype='auto',
+    attn_implementation=attn_impl,
 )
 
 # ── PEFT surgery (before moving to GPU, so new params are on same device) ──
@@ -42,7 +47,9 @@ elif METHOD == "ia3":
     freeze_model(model)
     model = apply_ia3(model)
 elif METHOD == "prefix":
-    raise NotImplementedError("prefix")
+    from prefix_tuning import apply_prefix_tuning
+    freeze_model(model)
+    model = apply_prefix_tuning(model, num_prefix_tokens=args_cli.prefix_tokens)
 elif METHOD == "qlora":
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -55,9 +62,11 @@ elif METHOD == "qlora":
         model_name,
         quantization_config=bnb_config,
         torch_dtype=torch.bfloat16,
+        attn_implementation=attn_impl,
     )
     freeze_model(model)
     model = apply_lora(model, rank=args_cli.lora_rank, alpha=args_cli.lora_alpha)
+    model._hf_peft_config_loaded = True
 
 
 model = model.to('cuda')
@@ -119,6 +128,10 @@ trainer = Trainer(model=model, args=training_args,
                   eval_dataset=eval_ds,
                   data_collator=collator,
                   processing_class=tokenizer)
+
+# Flag was set for QLoRA to pass Trainer's quantization validation;
+# remove it now so checkpoint saving doesn't try HF PEFT save logic.
+model._hf_peft_config_loaded = False
 
 trainer.train()
 

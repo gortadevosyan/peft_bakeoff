@@ -20,12 +20,15 @@ def save_config(run_dir, method, model_name, lr, trainable, total, cli_args):
         "trainable_params": trainable,
         "total_params": total,
         "trainable_pct": round(100 * trainable / total, 2),
+        "flash_attn": cli_args.flash_attn,
     }
 
     if method == "lora":
         config["lora_rank"] = cli_args.lora_rank
         config["lora_alpha"] = cli_args.lora_alpha
         config["lora_targets"] = ["q_proj", "v_proj"]
+    elif method == "prefix":
+        config["prefix_tokens"] = cli_args.prefix_tokens
 
     os.makedirs(run_dir, exist_ok=True)
     with open(f"{run_dir}/config.json", "w") as f:

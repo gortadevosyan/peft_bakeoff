@@ -3,13 +3,19 @@ import os
 import json
 import torch
 
-ANSWER_RE = re.compile(r"####\s*(-?\d+)")
+ANSWER_RE = re.compile(r"####\s*(-?[\d,]+)")
+FALLBACK_RE = re.compile(r"[Tt]he answer is\s*\$?\s*(-?[\d,]+)")
 
 def extract_answer(text: str) -> int | None:
-    """Pull the integer after '####' out of a generation or gold answer.
-    Returns None if not found."""
+    """Pull the final numeric answer from a generation or gold answer.
+    Tries '#### N' first (GSM8K gold format), then 'The answer is N' as fallback."""
     m = ANSWER_RE.search(text)
-    return int(m.group(1)) if m else None
+    if m:
+        return int(m.group(1).replace(",", ""))
+    m = FALLBACK_RE.search(text)
+    if m:
+        return int(m.group(1).replace(",", ""))
+    return None
 
 def evaluate(model, tokenizer, test_data, max_new_tokens=256):
     model.eval()                                 
