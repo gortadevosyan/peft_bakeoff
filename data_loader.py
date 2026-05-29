@@ -5,7 +5,6 @@ def load_gsm8k(partition):
     data = gsm8k[partition]
     return data
 
-# PROMPT_TEMPLATE = "Question: {q}\nAnswer: {a}"
 
 def preprocess_example(example, tokenizer, max_length=512):
     """example: dict{"question": '...', 'answer': '...'}"""

@@ -5,11 +5,8 @@ class LoraLinear(nn.Module):
     def __init__(self, base_linear: nn.Linear, rank: int = 16, alpha: int=16):
         super().__init__()
         self.base = base_linear
-        # Use the public attributes, NOT base_linear.weight.shape — for quantized
-        # bases (bnb.Linear4bit), weight.shape is the packed storage shape, not [out, in].
         fin  = base_linear.in_features
         fout = base_linear.out_features
-        # For a quantized base (e.g. bnb.Linear4bit), weight.dtype is uint8 and
         # can't carry gradients. Fall back to bfloat16 for the trainable LoRA matrices.
         base_dtype = self.base.weight.dtype
         lora_dtype = base_dtype if base_dtype.is_floating_point else torch.bfloat16

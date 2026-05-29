@@ -37,7 +37,7 @@ model = AutoModelForCausalLM.from_pretrained(
     attn_implementation=attn_impl,
 )
 
-# ── PEFT surgery (before moving to GPU, so new params are on same device) ──
+
 if METHOD == "lora":
     freeze_model(model)
     model = apply_lora(model, rank=args_cli.lora_rank, alpha=args_cli.lora_alpha)
@@ -53,11 +53,11 @@ elif METHOD == "prefix":
 elif METHOD == "qlora":
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",                    # NormalFloat-4, the QLoRA paper's default
-        bnb_4bit_compute_dtype=torch.bfloat16,        # matmuls run in bf16, weights stored 4-bit
-        bnb_4bit_use_double_quant=True,               # quantize the quant constants too; ~0.4 bit/param savings
+        bnb_4bit_quant_type="nf4",                    # NormalFloat-4
+        bnb_4bit_compute_dtype=torch.bfloat16,        # matmuls run in bf16,
+        bnb_4bit_use_double_quant=True,               
     )
-    # Re-load the model in 4-bit (this REPLACES the load above)
+    # Re-load the model in 4-bit (this replaces the load above)
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=bnb_config,
